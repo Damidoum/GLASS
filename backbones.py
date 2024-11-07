@@ -1,3 +1,6 @@
+import torchvision.models as models
+import timm
+
 _BACKBONES = {
     "alexnet": "models.alexnet(pretrained=True)",
     "resnet18": "models.resnet18(pretrained=True)",
