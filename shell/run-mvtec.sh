@@ -1,6 +1,7 @@
-datapath=/root/dataset/MVTec
-augpath=/root/dataset/dtd/images
-classes=('carpet' 'grid' 'leather' 'tile' 'wood' 'bottle' 'cable' 'capsule' 'hazelnut' 'metal_nut' 'pill' 'screw' 'toothbrush' 'transistor' 'zipper')
+datapath=/storage/ml/mvtec
+augpath=/storage/ml/dtd/images
+#classes=('carpet' 'grid' 'leather' 'tile' 'wood' 'bottle' 'cable' 'capsule' 'hazelnut' 'metal_nut' 'pill' 'screw' 'toothbrush' 'transistor' 'zipper')
+classes=("screw")
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -15,7 +16,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 640 \
+    --meta_epochs 5 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \

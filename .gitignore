@@ -1,5 +1,7 @@
 # GLASS project
 results/
+foreground_masks/
+glass_env/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

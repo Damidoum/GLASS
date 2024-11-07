@@ -19,6 +19,7 @@ import cv2
 import utils
 import glob
 import shutil
+import time
 
 LOGGER = logging.getLogger(__name__)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -40,33 +41,32 @@ class GLASS(torch.nn.Module):
         self.device = device
 
     def load(
-            self,
-            backbone,
-            layers_to_extract_from,
-            device,
-            input_shape,
-            pretrain_embed_dimension,
-            target_embed_dimension,
-            patchsize=3,
-            patchstride=1,
-            meta_epochs=640,
-            eval_epochs=1,
-            dsc_layers=2,
-            dsc_hidden=1024,
-            dsc_margin=0.5,
-            train_backbone=False,
-            pre_proj=1,
-            mining=1,
-            noise=0.015,
-            radius=0.75,
-            p=0.5,
-            lr=0.0001,
-            svd=0,
-            step=20,
-            limit=392,
-            **kwargs,
+        self,
+        backbone,
+        layers_to_extract_from,
+        device,
+        input_shape,
+        pretrain_embed_dimension,
+        target_embed_dimension,
+        patchsize=3,
+        patchstride=1,
+        meta_epochs=640,
+        eval_epochs=1,
+        dsc_layers=2,
+        dsc_hidden=1024,
+        dsc_margin=0.5,
+        train_backbone=False,
+        pre_proj=1,
+        mining=1,
+        noise=0.015,
+        radius=0.75,
+        p=0.5,
+        lr=0.0001,
+        svd=0,
+        step=20,
+        limit=392,
+        **kwargs,
     ):
-
         self.backbone = backbone.to(device)
         self.layers_to_extract_from = layers_to_extract_from
         self.input_shape = input_shape
@@ -79,7 +79,9 @@ class GLASS(torch.nn.Module):
         feature_dimensions = feature_aggregator.feature_dimensions(input_shape)
         self.forward_modules["feature_aggregator"] = feature_aggregator
 
-        preprocessing = common.Preprocessing(feature_dimensions, pretrain_embed_dimension)
+        preprocessing = common.Preprocessing(
+            feature_dimensions, pretrain_embed_dimension
+        )
         self.forward_modules["preprocessing"] = preprocessing
         self.target_embed_dimension = target_embed_dimension
         preadapt_aggregator = common.Aggregator(target_dim=target_embed_dimension)
@@ -90,18 +92,26 @@ class GLASS(torch.nn.Module):
         self.lr = lr
         self.train_backbone = train_backbone
         if self.train_backbone:
-            self.backbone_opt = torch.optim.AdamW(self.forward_modules["feature_aggregator"].backbone.parameters(), lr)
+            self.backbone_opt = torch.optim.AdamW(
+                self.forward_modules["feature_aggregator"].backbone.parameters(), lr
+            )
 
         self.pre_proj = pre_proj
         if self.pre_proj > 0:
-            self.pre_projection = Projection(self.target_embed_dimension, self.target_embed_dimension, pre_proj)
+            self.pre_projection = Projection(
+                self.target_embed_dimension, self.target_embed_dimension, pre_proj
+            )
             self.pre_projection.to(self.device)
-            self.proj_opt = torch.optim.Adam(self.pre_projection.parameters(), lr, weight_decay=1e-5)
+            self.proj_opt = torch.optim.Adam(
+                self.pre_projection.parameters(), lr, weight_decay=1e-5
+            )
 
         self.eval_epochs = eval_epochs
         self.dsc_layers = dsc_layers
         self.dsc_hidden = dsc_hidden
-        self.discriminator = Discriminator(self.target_embed_dimension, n_layers=dsc_layers, hidden=dsc_hidden)
+        self.discriminator = Discriminator(
+            self.target_embed_dimension, n_layers=dsc_layers, hidden=dsc_hidden
+        )
         self.discriminator.to(self.device)
         self.dsc_opt = torch.optim.AdamW(self.discriminator.parameters(), lr=lr * 2)
         self.dsc_margin = dsc_margin
@@ -119,7 +129,9 @@ class GLASS(torch.nn.Module):
         self.focal_loss = FocalLoss()
 
         self.patch_maker = PatchMaker(patchsize, stride=patchstride)
-        self.anomaly_segmentor = common.RescaleSegmentor(device=self.device, target_size=input_shape[-2:])
+        self.anomaly_segmentor = common.RescaleSegmentor(
+            device=self.device, target_size=input_shape[-2:]
+        )
         self.model_dir = ""
         self.dataset_name = ""
         self.logger = None
@@ -137,7 +149,9 @@ class GLASS(torch.nn.Module):
         """Returns feature embeddings for images."""
         if not evaluation and self.train_backbone:
             self.forward_modules["feature_aggregator"].train()
-            features = self.forward_modules["feature_aggregator"](images, eval=evaluation)
+            features = self.forward_modules["feature_aggregator"](
+                images, eval=evaluation
+            )
         else:
             self.forward_modules["feature_aggregator"].eval()
             with torch.no_grad():
@@ -148,9 +162,13 @@ class GLASS(torch.nn.Module):
         for i, feat in enumerate(features):
             if len(feat.shape) == 3:
                 B, L, C = feat.shape
-                features[i] = feat.reshape(B, int(math.sqrt(L)), int(math.sqrt(L)), C).permute(0, 3, 1, 2)
+                features[i] = feat.reshape(
+                    B, int(math.sqrt(L)), int(math.sqrt(L)), C
+                ).permute(0, 3, 1, 2)
 
-        features = [self.patch_maker.patchify(x, return_spatial_info=True) for x in features]
+        features = [
+            self.patch_maker.patchify(x, return_spatial_info=True) for x in features
+        ]
         patch_shapes = [x[1] for x in features]
         patch_features = [x[0] for x in features]
         ref_num_patches = patch_shapes[0]
@@ -187,23 +205,31 @@ class GLASS(torch.nn.Module):
 
     def trainer(self, training_data, val_data, name):
         state_dict = {}
-        ckpt_path = glob.glob(self.ckpt_dir + '/ckpt_best*')
+        ckpt_path = glob.glob(self.ckpt_dir + "/ckpt_best*")
         ckpt_path_save = os.path.join(self.ckpt_dir, "ckpt.pth")
         if len(ckpt_path) != 0:
             LOGGER.info("Start testing, ckpt file found!")
-            return 0., 0., 0., 0., 0., -1.
+            return 0.0, 0.0, 0.0, 0.0, 0.0, -1.0
 
         def update_state_dict():
-            state_dict["discriminator"] = OrderedDict({
-                k: v.detach().cpu()
-                for k, v in self.discriminator.state_dict().items()})
-            if self.pre_proj > 0:
-                state_dict["pre_projection"] = OrderedDict({
+            state_dict["discriminator"] = OrderedDict(
+                {
                     k: v.detach().cpu()
-                    for k, v in self.pre_projection.state_dict().items()})
+                    for k, v in self.discriminator.state_dict().items()
+                }
+            )
+            if self.pre_proj > 0:
+                state_dict["pre_projection"] = OrderedDict(
+                    {
+                        k: v.detach().cpu()
+                        for k, v in self.pre_projection.state_dict().items()
+                    }
+                )
 
+        print("step -- distribution computation", end=" ")
+        start = time.time()
         self.distribution = training_data.dataset.distribution
-        xlsx_path = './datasets/excel/' + name.split('_')[0] + '_distribution.xlsx'
+        xlsx_path = "./datasets/excel/" + name.split("_")[0] + "_distribution.xlsx"
         try:
             if self.distribution == 1:  # rejudge by image-level spectrogram analysis
                 self.distribution = 1
@@ -217,11 +243,11 @@ class GLASS(torch.nn.Module):
             elif self.distribution == 4:  # opposite choose by file
                 self.distribution = 0
                 df = pd.read_excel(xlsx_path)
-                self.svd = 1 - df.loc[df['Class'] == name, 'Distribution'].values[0]
+                self.svd = 1 - df.loc[df["Class"] == name, "Distribution"].values[0]
             else:  # choose by file
                 self.distribution = 0
                 df = pd.read_excel(xlsx_path)
-                self.svd = df.loc[df['Class'] == name, 'Distribution'].values[0]
+                self.svd = df.loc[df["Class"] == name, "Distribution"].values[0]
         except:
             self.distribution = 1
             self.svd = 1
@@ -242,21 +268,25 @@ class GLASS(torch.nn.Module):
 
             avg_img = utils.torch_format_2_numpy_img(self.c.detach().cpu().numpy())
             self.svd = utils.distribution_judge(avg_img, name)
-            os.makedirs(f'./results/judge/avg/{self.svd}', exist_ok=True)
-            cv2.imwrite(f'./results/judge/avg/{self.svd}/{name}.png', avg_img)
+            os.makedirs(f"./results/judge/avg/{self.svd}", exist_ok=True)
+            cv2.imwrite(f"./results/judge/avg/{self.svd}/{name}.png", avg_img)
             return self.svd
-
-        pbar = tqdm.tqdm(range(self.meta_epochs), unit='epoch')
+        end = time.time()
+        print(round(end - start, 3))
+        pbar = tqdm.tqdm(range(self.meta_epochs), unit="epoch")
         pbar_str1 = ""
         best_record = None
         for i_epoch in pbar:
+            start = time.time()
             self.forward_modules.eval()
             with torch.no_grad():  # compute center
                 for i, data in enumerate(training_data):
                     img = data["image"]
                     img = img.to(torch.float).to(self.device)
                     if self.pre_proj > 0:
-                        outputs = self.pre_projection(self._embed(img, evaluation=False)[0])
+                        outputs = self.pre_projection(
+                            self._embed(img, evaluation=False)[0]
+                        )
                         outputs = outputs[0] if len(outputs) == 2 else outputs
                     else:
                         outputs = self._embed(img, evaluation=False)[0]
@@ -269,14 +299,24 @@ class GLASS(torch.nn.Module):
                     else:
                         self.c += batch_mean
                 self.c /= len(training_data)
-
-            pbar_str, pt, pf = self._train_discriminator(training_data, i_epoch, pbar, pbar_str1)
+            print(f"mean -- {time.time() - start}")
+            start2 = time.time()
+            pbar_str, pt, pf = self._train_discriminator(
+                training_data, i_epoch, pbar, pbar_str1
+            )
+            print(f"discriminator -- {time.time() - start2}")
             update_state_dict()
-
+            print(f"time before eval: {time.time() - end}")
             if (i_epoch + 1) % self.eval_epochs == 0:
-                images, scores, segmentations, labels_gt, masks_gt = self.predict(val_data)
-                image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
-                                                                                         labels_gt, masks_gt, name)
+                print("make validation")
+                images, scores, segmentations, labels_gt, masks_gt = self.predict(
+                    val_data
+                )
+                image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = (
+                    self._evaluate(
+                        images, scores, segmentations, labels_gt, masks_gt, name
+                    )
+                )
 
                 self.logger.logger.add_scalar("i-auroc", image_auroc, i_epoch)
                 self.logger.logger.add_scalar("i-ap", image_ap, i_epoch)
@@ -284,33 +324,55 @@ class GLASS(torch.nn.Module):
                 self.logger.logger.add_scalar("p-ap", pixel_ap, i_epoch)
                 self.logger.logger.add_scalar("p-pro", pixel_pro, i_epoch)
 
-                eval_path = './results/eval/' + name + '/'
-                train_path = './results/training/' + name + '/'
+                eval_path = "./results/eval/" + name + "/"
+                train_path = "./results/training/" + name + "/"
                 if best_record is None:
-                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch]
-                    ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
+                    best_record = [
+                        image_auroc,
+                        image_ap,
+                        pixel_auroc,
+                        pixel_ap,
+                        pixel_pro,
+                        i_epoch,
+                    ]
+                    ckpt_path_best = os.path.join(
+                        self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch)
+                    )
                     torch.save(state_dict, ckpt_path_best)
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
 
                 elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch]
+                    best_record = [
+                        image_auroc,
+                        image_ap,
+                        pixel_auroc,
+                        pixel_ap,
+                        pixel_pro,
+                        i_epoch,
+                    ]
                     os.remove(ckpt_path_best)
-                    ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
+                    ckpt_path_best = os.path.join(
+                        self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch)
+                    )
                     torch.save(state_dict, ckpt_path_best)
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
 
-                pbar_str1 = f" IAUC:{round(image_auroc * 100, 2)}({round(best_record[0] * 100, 2)})" \
-                            f" IAP:{round(image_ap * 100, 2)}({round(best_record[1] * 100, 2)})" \
-                            f" PAUC:{round(pixel_auroc * 100, 2)}({round(best_record[2] * 100, 2)})" \
-                            f" PAP:{round(pixel_ap * 100, 2)}({round(best_record[3] * 100, 2)})" \
-                            f" PRO:{round(pixel_pro * 100, 2)}({round(best_record[4] * 100, 2)})" \
-                            f" E:{i_epoch}({best_record[-1]})"
+                pbar_str1 = (
+                    f" IAUC:{round(image_auroc * 100, 2)}({round(best_record[0] * 100, 2)})"
+                    f" IAP:{round(image_ap * 100, 2)}({round(best_record[1] * 100, 2)})"
+                    f" PAUC:{round(pixel_auroc * 100, 2)}({round(best_record[2] * 100, 2)})"
+                    f" PAP:{round(pixel_ap * 100, 2)}({round(best_record[3] * 100, 2)})"
+                    f" PRO:{round(pixel_pro * 100, 2)}({round(best_record[4] * 100, 2)})"
+                    f" E:{i_epoch}({best_record[-1]})"
+                )
                 pbar_str += pbar_str1
                 pbar.set_description_str(pbar_str)
 
             torch.save(state_dict, ckpt_path_save)
+            end = time.time()
+            print(f"Epoch Duration -- {round(end - start, 5)}")
         return best_record
 
     def _train_discriminator(self, input_data, cur_epoch, pbar, pbar_str1):
@@ -318,8 +380,14 @@ class GLASS(torch.nn.Module):
         if self.pre_proj > 0:
             self.pre_projection.train()
         self.discriminator.train()
-
-        all_loss, all_p_true, all_p_fake, all_r_t, all_r_g, all_r_f = [], [], [], [], [], []
+        all_loss, all_p_true, all_p_fake, all_r_t, all_r_g, all_r_f = (
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
         sample_num = 0
         for i_iter, data_item in enumerate(input_data):
             self.dsc_opt.zero_grad()
@@ -347,27 +415,36 @@ class GLASS(torch.nn.Module):
 
             center = self.c.repeat(img.shape[0], 1, 1)
             center = center.reshape(-1, center.shape[-1])
-            true_points = torch.concat([fake_feats[mask_s_gt[:, 0] == 0], true_feats], dim=0)
+            true_points = torch.concat(
+                [fake_feats[mask_s_gt[:, 0] == 0], true_feats], dim=0
+            )
             c_t_points = torch.concat([center[mask_s_gt[:, 0] == 0], center], dim=0)
             dist_t = torch.norm(true_points - c_t_points, dim=1)
             r_t = torch.tensor([torch.quantile(dist_t, q=self.radius)]).to(self.device)
 
             for step in range(self.step + 1):
                 scores = self.discriminator(torch.cat([true_feats, gaus_feats]))
-                true_scores = scores[:len(true_feats)]
-                gaus_scores = scores[len(true_feats):]
-                true_loss = torch.nn.BCELoss()(true_scores, torch.zeros_like(true_scores))
-                gaus_loss = torch.nn.BCELoss()(gaus_scores, torch.ones_like(gaus_scores))
+                true_scores = scores[: len(true_feats)]
+                gaus_scores = scores[len(true_feats) :]
+                true_loss = torch.nn.BCELoss()(
+                    true_scores, torch.zeros_like(true_scores)
+                )
+                gaus_loss = torch.nn.BCELoss()(
+                    gaus_scores, torch.ones_like(gaus_scores)
+                )
                 bce_loss = true_loss + gaus_loss
 
                 if step == self.step:
                     break
                 elif self.mining == 0:
                     dist_g = torch.norm(gaus_feats - center, dim=1)
-                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device)
+                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(
+                        self.device
+                    )
                     break
-
+                start_grad = time.time()
                 grad = torch.autograd.grad(gaus_loss, [gaus_feats])[0]
+                print(f"grad -- {time.time() - start_grad}")
                 grad_norm = torch.norm(grad, dim=1)
                 grad_norm = grad_norm.view(-1, 1)
                 grad_normalized = grad / (grad_norm + 1e-10)
@@ -377,7 +454,9 @@ class GLASS(torch.nn.Module):
 
                 if (step + 1) % 5 == 0:
                     dist_g = torch.norm(gaus_feats - center, dim=1)
-                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device)
+                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(
+                        self.device
+                    )
                     proj_feats = center if self.svd == 1 else true_feats
                     r = r_t if self.svd == 1 else 0.5
 
@@ -416,19 +495,30 @@ class GLASS(torch.nn.Module):
                 mask_ = mask_s_gt
             output = torch.cat([1 - fake_scores_, fake_scores_], dim=1)
             focal_loss = self.focal_loss(output, mask_)
-
+            start_backward = time.time()
             loss = bce_loss + focal_loss
             loss.backward()
+            print(f"backward -- {time.time() - start_backward}")
             if self.pre_proj > 0:
                 self.proj_opt.step()
             if self.train_backbone:
                 self.backbone_opt.step()
+            start_step = time.time()
             self.dsc_opt.step()
+            print(f"step -- {time.time() - start_step}")
 
-            pix_true = torch.concat([fake_scores.detach() * (1 - mask_s_gt), true_scores.detach()])
-            pix_fake = torch.concat([fake_scores.detach() * mask_s_gt, gaus_scores.detach()])
-            p_true = ((pix_true < self.dsc_margin).sum() - (pix_true == 0).sum()) / ((mask_s_gt == 0).sum() + true_scores.shape[0])
-            p_fake = (pix_fake >= self.dsc_margin).sum() / ((mask_s_gt == 1).sum() + gaus_scores.shape[0])
+            pix_true = torch.concat(
+                [fake_scores.detach() * (1 - mask_s_gt), true_scores.detach()]
+            )
+            pix_fake = torch.concat(
+                [fake_scores.detach() * mask_s_gt, gaus_scores.detach()]
+            )
+            p_true = ((pix_true < self.dsc_margin).sum() - (pix_true == 0).sum()) / (
+                (mask_s_gt == 0).sum() + true_scores.shape[0]
+            )
+            p_fake = (pix_fake >= self.dsc_margin).sum() / (
+                (mask_s_gt == 1).sum() + gaus_scores.shape[0]
+            )
 
             self.logger.logger.add_scalar(f"p_true", p_true, self.logger.g_iter)
             self.logger.logger.add_scalar(f"p_fake", p_fake, self.logger.g_iter)
@@ -471,33 +561,47 @@ class GLASS(torch.nn.Module):
         return pbar_str2, all_p_true_, all_p_fake_
 
     def tester(self, test_data, name):
-        ckpt_path = glob.glob(self.ckpt_dir + '/ckpt_best*')
+        ckpt_path = glob.glob(self.ckpt_dir + "/ckpt_best*")
         if len(ckpt_path) != 0:
             state_dict = torch.load(ckpt_path[0], map_location=self.device)
-            if 'discriminator' in state_dict:
-                self.discriminator.load_state_dict(state_dict['discriminator'])
+            if "discriminator" in state_dict:
+                self.discriminator.load_state_dict(state_dict["discriminator"])
                 if "pre_projection" in state_dict:
                     self.pre_projection.load_state_dict(state_dict["pre_projection"])
             else:
                 self.load_state_dict(state_dict, strict=False)
 
             images, scores, segmentations, labels_gt, masks_gt = self.predict(test_data)
-            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
-                                                                                     labels_gt, masks_gt, name, path='eval')
-            epoch = int(ckpt_path[0].split('_')[-1].split('.')[0])
+            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(
+                images, scores, segmentations, labels_gt, masks_gt, name, path="eval"
+            )
+            epoch = int(ckpt_path[0].split("_")[-1].split(".")[0])
         else:
-            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, epoch = 0., 0., 0., 0., 0., -1.
+            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, epoch = (
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -1.0,
+            )
             LOGGER.info("No ckpt file found!")
 
         return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, epoch
 
-    def _evaluate(self, images, scores, segmentations, labels_gt, masks_gt, name, path='training'):
+    def _evaluate(
+        self, images, scores, segmentations, labels_gt, masks_gt, name, path="training"
+    ):
         scores = np.squeeze(np.array(scores))
         img_min_scores = min(scores)
         img_max_scores = max(scores)
-        norm_scores = (scores - img_min_scores) / (img_max_scores - img_min_scores + 1e-10)
+        norm_scores = (scores - img_min_scores) / (
+            img_max_scores - img_min_scores + 1e-10
+        )
 
-        image_scores = metrics.compute_imagewise_retrieval_metrics(norm_scores, labels_gt, path)
+        image_scores = metrics.compute_imagewise_retrieval_metrics(
+            norm_scores, labels_gt, path
+        )
         image_auroc = image_scores["auroc"]
         image_ap = image_scores["ap"]
 
@@ -505,24 +609,30 @@ class GLASS(torch.nn.Module):
             segmentations = np.array(segmentations)
             min_scores = np.min(segmentations)
             max_scores = np.max(segmentations)
-            norm_segmentations = (segmentations - min_scores) / (max_scores - min_scores + 1e-10)
+            norm_segmentations = (segmentations - min_scores) / (
+                max_scores - min_scores + 1e-10
+            )
 
-            pixel_scores = metrics.compute_pixelwise_retrieval_metrics(norm_segmentations, masks_gt, path)
+            pixel_scores = metrics.compute_pixelwise_retrieval_metrics(
+                norm_segmentations, masks_gt, path
+            )
             pixel_auroc = pixel_scores["auroc"]
             pixel_ap = pixel_scores["ap"]
-            if path == 'eval':
+            if path == "eval":
                 try:
-                    pixel_pro = metrics.compute_pro(np.squeeze(np.array(masks_gt)), norm_segmentations)
+                    pixel_pro = metrics.compute_pro(
+                        np.squeeze(np.array(masks_gt)), norm_segmentations
+                    )
 
                 except:
-                    pixel_pro = 0.
+                    pixel_pro = 0.0
             else:
-                pixel_pro = 0.
+                pixel_pro = 0.0
 
         else:
-            pixel_auroc = -1.
-            pixel_ap = -1.
-            pixel_pro = -1.
+            pixel_auroc = -1.0
+            pixel_ap = -1.0
+            pixel_pro = -1.0
             return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
 
         defects = np.array(images)
@@ -531,16 +641,18 @@ class GLASS(torch.nn.Module):
             defect = utils.torch_format_2_numpy_img(defects[i])
             target = utils.torch_format_2_numpy_img(targets[i])
 
-            mask = cv2.cvtColor(cv2.resize(norm_segmentations[i], (defect.shape[1], defect.shape[0])),
-                                cv2.COLOR_GRAY2BGR)
-            mask = (mask * 255).astype('uint8')
+            mask = cv2.cvtColor(
+                cv2.resize(norm_segmentations[i], (defect.shape[1], defect.shape[0])),
+                cv2.COLOR_GRAY2BGR,
+            )
+            mask = (mask * 255).astype("uint8")
             mask = cv2.applyColorMap(mask, cv2.COLORMAP_JET)
 
             img_up = np.hstack([defect, target, mask])
             img_up = cv2.resize(img_up, (256 * 3, 256))
-            full_path = './results/' + path + '/' + name + '/'
+            full_path = "./results/" + path + "/" + name + "/"
             utils.del_remake_dir(full_path, del_flag=False)
-            cv2.imwrite(full_path + str(i + 1).zfill(3) + '.png', img_up)
+            cv2.imwrite(full_path + str(i + 1).zfill(3) + ".png", img_up)
 
         return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
 
@@ -555,7 +667,9 @@ class GLASS(torch.nn.Module):
         labels_gt = []
         masks_gt = []
 
-        with tqdm.tqdm(test_dataloader, desc="Inferring...", leave=False, unit='batch') as data_iterator:
+        with tqdm.tqdm(
+            test_dataloader, desc="Inferring...", leave=False, unit="batch"
+        ) as data_iterator:
             for data in data_iterator:
                 if isinstance(data, dict):
                     labels_gt.extend(data["is_anomaly"].numpy().tolist())
@@ -581,19 +695,26 @@ class GLASS(torch.nn.Module):
         self.discriminator.eval()
 
         with torch.no_grad():
-
-            patch_features, patch_shapes = self._embed(img, provide_patch_shapes=True, evaluation=True)
+            patch_features, patch_shapes = self._embed(
+                img, provide_patch_shapes=True, evaluation=True
+            )
             if self.pre_proj > 0:
                 patch_features = self.pre_projection(patch_features)
-                patch_features = patch_features[0] if len(patch_features) == 2 else patch_features
+                patch_features = (
+                    patch_features[0] if len(patch_features) == 2 else patch_features
+                )
 
             patch_scores = image_scores = self.discriminator(patch_features)
-            patch_scores = self.patch_maker.unpatch_scores(patch_scores, batchsize=img.shape[0])
+            patch_scores = self.patch_maker.unpatch_scores(
+                patch_scores, batchsize=img.shape[0]
+            )
             scales = patch_shapes[0]
             patch_scores = patch_scores.reshape(img.shape[0], scales[0], scales[1])
             masks = self.anomaly_segmentor.convert_to_segmentation(patch_scores)
 
-            image_scores = self.patch_maker.unpatch_scores(image_scores, batchsize=img.shape[0])
+            image_scores = self.patch_maker.unpatch_scores(
+                image_scores, batchsize=img.shape[0]
+            )
             image_scores = self.patch_maker.score(image_scores)
             if isinstance(image_scores, torch.Tensor):
                 image_scores = image_scores.cpu().numpy()
