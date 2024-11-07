@@ -46,11 +46,15 @@ def distribution_judge(img, name):
 
     l1_density = points_num / (4 * np.max([side_x, 1]) * np.max([side_y, 1]))
     l2_density = points_num / (np.sum(l2_dist_all <= radius) + 1e-10)
-    flag = 1 if (l1_density > 0.21 or l2_density > 0.21) and radius > 12 and points_num > 60 else 0
-    type = 'Maniflod' if flag == 0 else 'HyperSphere'
-    print(f'Distribution: {flag} / {type}.')
+    flag = (
+        1
+        if (l1_density > 0.21 or l2_density > 0.21) and radius > 12 and points_num > 60
+        else 0
+    )
+    type = "Maniflod" if flag == 0 else "HyperSphere"
+    print(f"Distribution: {flag} / {type}.")
 
-    output_path = './results/judge/fft/' + str(flag) + '/' + name + '.png'
+    output_path = "./results/judge/fft/" + str(flag) + "/" + name + ".png"
     img_up = np.hstack([img_, np.repeat(magnitude, 3).reshape((height, width, 3))])
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     cv2.imwrite(output_path, img_up)
@@ -58,7 +62,7 @@ def distribution_judge(img, name):
 
 
 def create_storage_folder(
-        main_folder_path, project_folder, group_folder, run_name, mode="iterate"
+    main_folder_path, project_folder, group_folder, run_name, mode="iterate"
 ):
     os.makedirs(main_folder_path, exist_ok=True)
     save_path = main_folder_path
@@ -95,10 +99,10 @@ def fix_seeds(seed, with_torch=True, with_cuda=True):
 
 
 def compute_and_store_final_results(
-        results_path,
-        results,
-        column_names,
-        row_names=None,
+    results_path,
+    results,
+    column_names,
+    row_names=None,
 ):
     """Store computed results as CSV file.
 
@@ -152,9 +156,9 @@ def torch_format_2_numpy_img(img):
         img = img.transpose([1, 2, 0])
         img = img * np.array(IMAGENET_STD) + np.array(IMAGENET_MEAN)
         img = img[:, :, [2, 1, 0]]
-        img = (img * 255).astype('uint8')
+        img = (img * 255).astype("uint8")
     else:
         img = img.transpose([1, 2, 0])
         img = np.repeat(img, 3, axis=-1)
-        img = (img * 255).astype('uint8')
+        img = (img * 255).astype("uint8")
     return img

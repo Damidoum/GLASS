@@ -46,26 +46,26 @@ def main(**kwargs):
 @click.option("--step", type=int, default=20)
 @click.option("--limit", type=int, default=392)
 def net(
-        backbone_names,
-        layers_to_extract_from,
-        pretrain_embed_dimension,
-        target_embed_dimension,
-        patchsize,
-        meta_epochs,
-        eval_epochs,
-        dsc_layers,
-        dsc_hidden,
-        dsc_margin,
-        train_backbone,
-        pre_proj,
-        mining,
-        noise,
-        radius,
-        p,
-        lr,
-        svd,
-        step,
-        limit,
+    backbone_names,
+    layers_to_extract_from,
+    pretrain_embed_dimension,
+    target_embed_dimension,
+    patchsize,
+    meta_epochs,
+    eval_epochs,
+    dsc_layers,
+    dsc_hidden,
+    dsc_margin,
+    train_backbone,
+    pre_proj,
+    mining,
+    noise,
+    radius,
+    p,
+    lr,
+    svd,
+    step,
+    limit,
 ):
     backbone_names = list(backbone_names)
     if len(backbone_names) > 1:
@@ -77,10 +77,14 @@ def net(
 
     def get_glass(input_shape, device):
         glasses = []
-        for backbone_name, layers_to_extract_from in zip(backbone_names, layers_to_extract_from_coll):
+        for backbone_name, layers_to_extract_from in zip(
+            backbone_names, layers_to_extract_from_coll
+        ):
             backbone_seed = None
             if ".seed-" in backbone_name:
-                backbone_name, backbone_seed = backbone_name.split(".seed-")[0], int(backbone_name.split("-")[-1])
+                backbone_name, backbone_seed = backbone_name.split(".seed-")[0], int(
+                    backbone_name.split("-")[-1]
+                )
             backbone = backbones.load(backbone_name)
             backbone.name, backbone.seed = backbone_name, backbone_seed
 
@@ -140,32 +144,36 @@ def net(
 @click.option("--rand_aug", default=1, type=int)
 @click.option("--augment", is_flag=True)
 def dataset(
-        name,
-        data_path,
-        aug_path,
-        subdatasets,
-        batch_size,
-        resize,
-        imagesize,
-        num_workers,
-        rotate_degrees,
-        translate,
-        scale,
-        brightness,
-        contrast,
-        saturation,
-        gray,
-        hflip,
-        vflip,
-        distribution,
-        mean,
-        std,
-        fg,
-        rand_aug,
-        augment,
+    name,
+    data_path,
+    aug_path,
+    subdatasets,
+    batch_size,
+    resize,
+    imagesize,
+    num_workers,
+    rotate_degrees,
+    translate,
+    scale,
+    brightness,
+    contrast,
+    saturation,
+    gray,
+    hflip,
+    vflip,
+    distribution,
+    mean,
+    std,
+    fg,
+    rand_aug,
+    augment,
 ):
-    _DATASETS = {"mvtec": ["datasets.mvtec", "MVTecDataset"], "visa": ["datasets.visa", "VisADataset"],
-                 "mpdd": ["datasets.mvtec", "MVTecDataset"], "wfdd": ["datasets.mvtec", "MVTecDataset"], }
+    _DATASETS = {
+        "mvtec": ["datasets.mvtec", "MVTecDataset"],
+        "visa": ["datasets.visa", "VisADataset"],
+        "mpdd": ["datasets.mvtec", "MVTecDataset"],
+        "wfdd": ["datasets.mvtec", "MVTecDataset"],
+    }
     dataset_info = _DATASETS[name]
     dataset_library = __import__(dataset_info[0], fromlist=[dataset_info[1]])
 
@@ -193,7 +201,7 @@ def dataset(
 
             test_dataloader.name = get_name + "_" + subdataset
 
-            if test == 'ckpt':
+            if test == "ckpt":
                 train_dataset = dataset_library.__dict__[dataset_info[1]](
                     data_path,
                     aug_path,
@@ -231,10 +239,14 @@ def dataset(
                 )
 
                 train_dataloader.name = test_dataloader.name
-                LOGGER.info(f"Dataset {subdataset.upper():^20}: train={len(train_dataset)} test={len(test_dataset)}")
+                LOGGER.info(
+                    f"Dataset {subdataset.upper():^20}: train={len(train_dataset)} test={len(test_dataset)}"
+                )
             else:
                 train_dataloader = test_dataloader
-                LOGGER.info(f"Dataset {subdataset.upper():^20}: train={0} test={len(test_dataset)}")
+                LOGGER.info(
+                    f"Dataset {subdataset.upper():^20}: train={0} test={len(test_dataset)}"
+                )
 
             dataloader_dict = {
                 "training": train_dataloader,
@@ -250,14 +262,14 @@ def dataset(
 
 @main.result_callback()
 def run(
-        methods,
-        results_path,
-        gpu,
-        seed,
-        log_group,
-        log_project,
-        run_name,
-        test,
+    methods,
+    results_path,
+    gpu,
+    seed,
+    log_group,
+    log_project,
+    run_name,
+    test,
 ):
     methods = {key: item for (key, item) in methods}
 
@@ -270,7 +282,7 @@ def run(
     device = utils.set_torch_device(gpu)
 
     result_collect = []
-    data = {'Class': [], 'Distribution': [], 'Foreground': []}
+    data = {"Class": [], "Distribution": [], "Foreground": []}
     df = pd.DataFrame(data)
     for dataloader_count, dataloaders in enumerate(list_of_dataloaders):
         utils.fix_seeds(seed, device)
@@ -283,26 +295,34 @@ def run(
                 dataset_name,
                 dataloader_count + 1,
                 len(list_of_dataloaders),
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
         )
 
         models_dir = os.path.join(run_save_path, "models")
         os.makedirs(models_dir, exist_ok=True)
         for i, GLASS in enumerate(glass_list):
-            flag = 0., 0., 0., 0., 0., -1.
+            flag = 0.0, 0.0, 0.0, 0.0, 0.0, -1.0
             if GLASS.backbone.seed is not None:
                 utils.fix_seeds(GLASS.backbone.seed, device)
 
             GLASS.set_model_dir(os.path.join(models_dir, f"backbone_{i}"), dataset_name)
-            if test == 'ckpt':
-                flag = GLASS.trainer(dataloaders["training"], dataloaders["testing"], dataset_name)
+            if test == "ckpt":
+                flag = GLASS.trainer(
+                    dataloaders["training"], dataloaders["testing"], dataset_name
+                )
                 if type(flag) == int:
-                    row_dist = {'Class': dataloaders["training"].name, 'Distribution': flag, 'Foreground': flag}
+                    row_dist = {
+                        "Class": dataloaders["training"].name,
+                        "Distribution": flag,
+                        "Foreground": flag,
+                    }
                     df = pd.concat([df, pd.DataFrame(row_dist, index=[0])])
 
             if type(flag) != int:
-                i_auroc, i_ap, p_auroc, p_ap, p_pro, epoch = GLASS.tester(dataloaders["testing"], dataset_name)
+                i_auroc, i_ap, p_auroc, p_ap, p_pro, epoch = GLASS.tester(
+                    dataloaders["testing"], dataset_name
+                )
                 result_collect.append(
                     {
                         "dataset_name": dataset_name,
@@ -327,8 +347,12 @@ def run(
                 # save results csv after each category
                 print("\n")
                 result_metric_names = list(result_collect[-1].keys())[1:]
-                result_dataset_names = [results["dataset_name"] for results in result_collect]
-                result_scores = [list(results.values())[1:] for results in result_collect]
+                result_dataset_names = [
+                    results["dataset_name"] for results in result_collect
+                ]
+                result_scores = [
+                    list(results.values())[1:] for results in result_collect
+                ]
                 utils.compute_and_store_final_results(
                     run_save_path,
                     result_scores,
@@ -337,14 +361,16 @@ def run(
                 )
 
     # save distribution judgment xlsx after all categories
-    if len(df['Class']) != 0:
-        os.makedirs('./datasets/excel', exist_ok=True)
-        xlsx_path = './datasets/excel/' + dataset_name.split('_')[0] + '_distribution.xlsx'
+    if len(df["Class"]) != 0:
+        os.makedirs("./datasets/excel", exist_ok=True)
+        xlsx_path = (
+            "./datasets/excel/" + dataset_name.split("_")[0] + "_distribution.xlsx"
+        )
         df.to_excel(xlsx_path, index=False)
 
 
 if __name__ == "__main__":
-    warnings.filterwarnings('ignore')
+    warnings.filterwarnings("ignore")
     logging.basicConfig(level=logging.INFO)
     LOGGER = logging.getLogger(__name__)
     LOGGER.info("Command line arguments: {}".format(" ".join(sys.argv)))

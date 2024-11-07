@@ -20,14 +20,17 @@ class Discriminator(torch.nn.Module):
         for i in range(n_layers - 1):
             _in = in_planes if i == 0 else _hidden
             _hidden = int(_hidden // 1.5) if hidden is None else hidden
-            self.body.add_module('block%d' % (i + 1),
-                                 torch.nn.Sequential(
-                                     torch.nn.Linear(_in, _hidden),
-                                     torch.nn.BatchNorm1d(_hidden),
-                                     torch.nn.LeakyReLU(0.2)
-                                 ))
-        self.tail = torch.nn.Sequential(torch.nn.Linear(_hidden, 1, bias=False),
-                                        torch.nn.Sigmoid())
+            self.body.add_module(
+                "block%d" % (i + 1),
+                torch.nn.Sequential(
+                    torch.nn.Linear(_in, _hidden),
+                    torch.nn.BatchNorm1d(_hidden),
+                    torch.nn.LeakyReLU(0.2),
+                ),
+            )
+        self.tail = torch.nn.Sequential(
+            torch.nn.Linear(_hidden, 1, bias=False), torch.nn.Sigmoid()
+        )
         self.apply(init_weight)
 
     def forward(self, x):
@@ -51,7 +54,7 @@ class Projection(torch.nn.Module):
             self.layers.add_module(f"{i}fc", torch.nn.Linear(_in, _out))
             if i < n_layers - 1:
                 if layer_type > 1:
-                    self.layers.add_module(f"{i}relu", torch.nn.LeakyReLU(.2))
+                    self.layers.add_module(f"{i}relu", torch.nn.LeakyReLU(0.2))
         self.apply(init_weight)
 
     def forward(self, x):
@@ -75,11 +78,15 @@ class PatchMaker:
             patchsize]
         """
         padding = int((self.patchsize - 1) / 2)
-        unfolder = torch.nn.Unfold(kernel_size=self.patchsize, stride=self.stride, padding=padding, dilation=1)
+        unfolder = torch.nn.Unfold(
+            kernel_size=self.patchsize, stride=self.stride, padding=padding, dilation=1
+        )
         unfolded_features = unfolder(features)
         number_of_total_patches = []
         for s in features.shape[-2:]:
-            n_patches = (s + 2 * padding - 1 * (self.patchsize - 1) - 1) / self.stride + 1
+            n_patches = (
+                s + 2 * padding - 1 * (self.patchsize - 1) - 1
+            ) / self.stride + 1
             number_of_total_patches.append(int(n_patches))
         unfolded_features = unfolded_features.reshape(
             *features.shape[:2], self.patchsize, self.patchsize, -1

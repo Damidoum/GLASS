@@ -62,7 +62,10 @@ class RescaleSegmentor:
             )
             _scores = _scores.squeeze(1)
             patch_scores = _scores.cpu().numpy()
-        return [ndimage.gaussian_filter(patch_score, sigma=self.smoothing) for patch_score in patch_scores]
+        return [
+            ndimage.gaussian_filter(patch_score, sigma=self.smoothing)
+            for patch_score in patch_scores
+        ]
 
 
 class NetworkFeatureAggregator(torch.nn.Module):
@@ -115,7 +118,9 @@ class NetworkFeatureAggregator(torch.nn.Module):
     def register_hook(self, layer_name):
         module = self.find_module(self.backbone, layer_name)
         if module is not None:
-            forward_hook = ForwardHook(self.outputs, layer_name, self.layers_to_extract_from[-1])
+            forward_hook = ForwardHook(
+                self.outputs, layer_name, self.layers_to_extract_from[-1]
+            )
             if isinstance(module, torch.nn.Sequential):
                 hook = module[-1].register_forward_hook(forward_hook)
             else:
@@ -123,16 +128,17 @@ class NetworkFeatureAggregator(torch.nn.Module):
             self.backbone.hook_handles.append(hook)
         else:
             raise ValueError(f"Module {layer_name} not found in the model")
-    
+
     def find_module(self, model, module_name):
         for name, module in model.named_modules():
             if name == module_name:
                 return module
-            elif '.' in module_name:
-                father, child = module_name.split('.', 1)
+            elif "." in module_name:
+                father, child = module_name.split(".", 1)
                 if name == father:
                     return self.find_module(module, child)
         return None
+
 
 class ForwardHook:
     def __init__(self, hook_dict, layer_name: str, last_layer_to_extract: str):
@@ -145,6 +151,7 @@ class ForwardHook:
     def __call__(self, module, input, output):
         self.hook_dict[self.layer_name] = output
         return None
+
 
 class LastLayerToExtractReachedException(Exception):
     pass
