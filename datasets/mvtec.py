@@ -1,3 +1,4 @@
+from pathlib import Path
 from torchvision import transforms
 from perlin import perlin_mask
 from enum import Enum
@@ -194,12 +195,10 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
 
             if self.class_fg:
-                fgmask_path = (
-                    image_path.split(classname)[0]
-                    + "fg_mask/"
-                    + classname
-                    + "/"
-                    + os.path.split(image_path)[-1]
+                fgmask_path = Path(
+                    "foreground_masks/mvtec/fg_mask/",
+                    classname,
+                    os.path.split(image_path)[-1],
                 )
                 mask_fg = PIL.Image.open(fgmask_path)
                 mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])

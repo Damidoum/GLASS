@@ -82,8 +82,9 @@ def net(
         ):
             backbone_seed = None
             if ".seed-" in backbone_name:
-                backbone_name, backbone_seed = backbone_name.split(".seed-")[0], int(
-                    backbone_name.split("-")[-1]
+                backbone_name, backbone_seed = (
+                    backbone_name.split(".seed-")[0],
+                    int(backbone_name.split("-")[-1]),
                 )
             backbone = backbones.load(backbone_name)
             backbone.name, backbone.seed = backbone_name, backbone_seed

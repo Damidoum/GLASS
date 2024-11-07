@@ -58,7 +58,6 @@ class Projection(torch.nn.Module):
         self.apply(init_weight)
 
     def forward(self, x):
-
         x = self.layers(x)
         return x
 
